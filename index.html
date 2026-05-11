@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Time</title>
+    <style>
+        :root { --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --accent: #818cf8; --dim: #64748b; }
+        body { background: var(--bg); color: var(--text); font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; margin: 0; min-height: 100vh; }
+        
+        .clock-container { background: var(--card); padding: 40px 20px; border-radius: 24px; text-align: center; width: 100%; max-width: 340px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); box-sizing: border-box; }
+        
+        .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 2px; color: var(--dim); margin-bottom: 5px; }
+        .main-time { font-size: 3.5rem; font-weight: bold; color: var(--accent); margin-bottom: 30px; line-height: 1; }
+        
+        .secondary-section { border-top: 1px solid #334155; padding-top: 25px; margin-top: 10px; }
+        .secondary-time { font-size: 2.2rem; font-weight: bold; color: var(--text); margin-bottom: 15px; }
+        
+        input { background: transparent; border: none; border-bottom: 1px solid var(--dim); color: var(--text); text-align: center; font-size: 0.9rem; padding: 5px; outline: none; width: 80%; transition: border-color 0.3s; }
+        input:focus { border-bottom-color: var(--accent); }
+        input::placeholder { color: #334155; }
+
+        .date-label { font-size: 0.8rem; color: var(--dim); margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="clock-container">
+        <div class="label">Local Time</div>
+        <div id="localTime" class="main-time">00:00:00</div>
+        <div id="localDate" class="date-label">---</div>
+
+        <div class="secondary-section">
+            <div class="label" id="cityLabel">Secondary City</div>
+            <div id="secondaryTime" class="secondary-time">--:--:--</div>
+            <input type="text" id="cityInput" placeholder="Enter major city (e.g. London)" autocomplete="off">
+        </div>
+    </div>
+
+    <script>
+        const cityInput = document.getElementById('cityInput');
+        const localTimeDisplay = document.getElementById('localTime');
+        const localDateDisplay = document.getElementById('localDate');
+        const secondaryTimeDisplay = document.getElementById('secondaryTime');
+        const cityLabel = document.getElementById('cityLabel');
+
+        let targetCity = localStorage.getItem('secondaryCity') || "";
+        cityInput.value = targetCity;
+
+        function updateClocks() {
+            const now = new Date();
+
+            // Local Time
+            localTimeDisplay.innerText = now.toLocaleTimeString([], { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            localDateDisplay.innerText = now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+
+            // Secondary Time
+            if (targetCity) {
+                try {
+                    // We use the Intl API to find the time in a specific city/timezone
+                    // Most major cities work directly as a locale string part
+                    const secondaryStr = now.toLocaleTimeString('en-US', {
+                        timeZone: getTimeZone(targetCity),
+                        hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit'
+                    });
+                    secondaryTimeDisplay.innerText = secondaryStr;
+                    cityLabel.innerText = targetCity;
+                } catch (e) {
+                    secondaryTimeDisplay.innerText = "City Not Found";
+                    cityLabel.innerText = "Error";
+                }
+            } else {
+                secondaryTimeDisplay.innerText = "00:00:00";
+                cityLabel.innerText = "Secondary City";
+            }
+        }
+
+        // Helper to guess timezone from city name (standard JS approach)
+        function getTimeZone(city) {
+            const cityMap = {
+                'london': 'Europe/London',
+                'new york': 'America/New_York',
+                'tokyo': 'Asia/Tokyo',
+                'paris': 'Europe/Paris',
+                'dubai': 'Asia/Dubai',
+                'hong kong': 'Asia/Hong_Kong',
+                'sydney': 'Australia/Sydney',
+                'los angeles': 'America/Los_Angeles',
+                'chicago': 'America/Chicago',
+                'berlin': 'Europe/Berlin'
+            };
+            
+            const cleanCity = city.toLowerCase().trim();
+            // If it's in our quick map, use it, otherwise try to format it (e.g., Europe/City)
+            if (cityMap[cleanCity]) return cityMap[cleanCity];
+            
+            // Basic fallback: Capitalize and hope the Intl API recognizes it
+            const formattedCity = cleanCity.split(' ').map(s => s.charAt(0).toUpperCase() + s.substring(1)).join('_');
+            // This is a simplified "guess"—real timezone lookup usually requires a library, 
+            // but for common major cities, this works well.
+            return null; // Force error catch if not in list for this simple version
+        }
+
+        // Refined Timezone Lookup for a single file app
+        function getSecondaryTime() {
+            if (!targetCity) return;
+
+            // Using a simple fetch to a free timezone API to be accurate
+            fetch(`https://worldtimeapi.org/api/timezone`).then(res => res.json()).then(zones => {
+                const foundZone = zones.find(z => z.toLowerCase().includes(targetCity.toLowerCase().replace(' ', '_')));
+                if (foundZone) {
+                    const now = new Date();
+                    const timeStr = now.toLocaleTimeString('en-US', { timeZone: foundZone, hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    secondaryTimeDisplay.innerText = timeStr;
+                    cityLabel.innerText = targetCity.toUpperCase();
+                }
+            }).catch(() => {
+                secondaryTimeDisplay.innerText = "Error";
+            });
+        }
+
+        // Optimized for your Pixel 6 Pro: Use a simple manual list or the built-in Intl if possible
+        function refreshTimes() {
+            const now = new Date();
+            localTimeDisplay.innerText = now.toLocaleTimeString([], { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            localDateDisplay.innerText = now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+
+            if (targetCity) {
+                // To keep this app zero-dependency, we'll try to find the timezone string
+                // If it fails, we show "Set City"
+                try {
+                    // Try to guess the timezone path
+                    const zones = Intl.supportedValuesOf('timeZone');
+                    const match = zones.find(z => z.toLowerCase().includes(targetCity.toLowerCase().replace(' ', '_')));
+                    
+                    if (match) {
+                        secondaryTimeDisplay.innerText = now.toLocaleTimeString([], { timeZone: match, hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                        cityLabel.innerText = targetCity.toUpperCase();
+                    } else {
+                        secondaryTimeDisplay.innerText = "--:--:--";
+                        cityLabel.innerText = "City Not Found";
+                    }
+                } catch (e) {
+                    secondaryTimeDisplay.innerText = "Error";
+                }
+            }
+        }
+
+        cityInput.addEventListener('change', () => {
+            targetCity = cityInput.value;
+            localStorage.setItem('secondaryCity', targetCity);
+            refreshTimes();
+        });
+
+        setInterval(refreshTimes, 1000);
+        refreshTimes();
+    </script>
+</body>
+</html>
